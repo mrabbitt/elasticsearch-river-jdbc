@@ -231,15 +231,17 @@ public class SimpleRiverSource implements RiverSource {
 
     @Override
     public String fetch() throws SQLException, IOException {
-        PreparedStatement statement = null;
+        Statement statement;
         ResultSet results;
         if (context.pollStatementParams().isEmpty()) {
             // Postgresql requires executeQuery(sql) for cursor with fetchsize
             results = executeQuery(context.pollStatement());
+            statement = results.getStatement();
         } else {
-            statement = prepareQuery(context.pollStatement());
-            bind(statement, context.pollStatementParams());
-            results = executeQuery(statement);
+            PreparedStatement preparedStatement = prepareQuery(context.pollStatement());
+            statement = preparedStatement;
+            bind(preparedStatement, context.pollStatementParams());
+            results = executeQuery(preparedStatement);
         }
         String mergeDigest;
         try {
@@ -249,10 +251,12 @@ public class SimpleRiverSource implements RiverSource {
             mergeDigest = merge(results, listener);
         } catch (Exception e) {
             throw new IOException(e);
+        } finally {
+            close(results);
+            close(statement);
         }
-        close(results);
-        close(statement);
         acknowledge();
+
         return mergeDigest;
     }
 
@@ -297,15 +301,17 @@ public class SimpleRiverSource implements RiverSource {
                 bind(statement, context.pollAckStatementParams());
             }
             statement.execute();
-            close(statement);
+
             try {
                 if (!connection.getAutoCommit()) {
                     connection.commit();
                 }
             } catch (SQLException e) {
                 //  Can't call commit when autocommit=true
+            } finally {
+                close(statement);
+                closeWriting();
             }
-            closeWriting();
         }
     }
 
@@ -489,9 +495,13 @@ public class SimpleRiverSource implements RiverSource {
      * @throws SQLException
      */
     @Override
-    public SimpleRiverSource close(ResultSet result) throws SQLException {
+    public SimpleRiverSource close(ResultSet result){
         if (result != null) {
-            result.close();
+            try {
+                result.close();
+            } catch (SQLException e) {
+                logger.warn("Exception closing resultset", e);
+            }
         }
         return this;
     }
@@ -503,9 +513,13 @@ public class SimpleRiverSource implements RiverSource {
      * @throws SQLException
      */
     @Override
-    public SimpleRiverSource close(PreparedStatement statement) throws SQLException {
+    public SimpleRiverSource close(Statement statement){
         if (statement != null) {
-            statement.close();
+            try {
+                statement.close();
+            } catch (SQLException e) {
+                logger.warn("Exception closing statement", e);
+            }
         }
         return this;
     }
@@ -535,8 +549,6 @@ public class SimpleRiverSource implements RiverSource {
 
     /**
      * Close read connection
-     *
-     * @throws SQLException
      */
     @Override
     public SimpleRiverSource closeWriting() {

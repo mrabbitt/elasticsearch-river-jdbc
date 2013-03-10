@@ -25,6 +25,7 @@ import org.elasticsearch.river.jdbc.support.ValueListener;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.Statement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.ParseException;
@@ -223,21 +224,20 @@ public interface RiverSource {
     RiverSource acknowledge(BulkResponse response) throws IOException;
 
     /**
-     * Close result set
+     * Close result set, gracefully handling a null result set and catching any {@link SQLException}s.
      *
      * @param result
      * @return this river source
-     * @throws SQLException
      */
-    RiverSource close(ResultSet result) throws SQLException;
+    RiverSource close(ResultSet result);
 
     /**
-     * Close statement
+     * Close statement, gracefully handling a null statement and catching any {@link SQLException}s.
+     *
      * @param statement
      * @return this river source
-     * @throws SQLException
      */
-    RiverSource close(PreparedStatement statement) throws SQLException;
+    RiverSource close(Statement statement);
 
     /**
      * Close reading from this river source
